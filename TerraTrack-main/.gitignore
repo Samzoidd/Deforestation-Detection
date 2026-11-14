@@ -1,0 +1,19 @@
+# Google Earth Engine credentials
+*.json
+gee_credentials.json
+CWD_credentials.json
+
+# PyTorch Model weights
+model/
+*.pth
+
+# Python environment and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+.ipynb_checkpoints/
+*.ipynb
+.agents/

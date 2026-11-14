@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TerraTrack - Global Deforestation Monitor</title>
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}"/>
+  <!-- CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <!-- WELCOME PAGE -->
+  <div id="welcomePage">
+    <div class="stars-bg"></div>
+    <canvas id="earthCanvas"></canvas>
+    <div class="welcome-content">
+      <div class="logo-badge">TERRATRACK v2.0</div>
+      <h1>TERRATRACK</h1>
+      <p class="tagline">Global Deforestation Monitoring System</p>
+
+      <button class="enter-btn" onclick="enterDashboard()">
+        ENTER DASHBOARD
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard">
+    <header class="dash-header">
+      <div class="logo">
+        <h1>TERRATRACK</h1>
+      </div>
+    </header>
+
+    <main class="dash-main">
+      <!-- Control Panel -->
+      <aside class="control-panel">
+        <div class="panel-section">
+          <div class="section-title">
+            <span class="num">1</span>
+            Select Location
+          </div>
+          <div class="search-wrapper">
+            <input type="text" id="placeSearch" class="search-input"
+                   placeholder="Search place (e.g. Amazon, Brazil)"
+                   oninput="onSearchInput()" autocomplete="off">
+            <div id="searchDropdown"></div>
+          </div>
+          <div class="hint-box">
+            <b>Click anywhere on the map</b> to set your analysis pin, or enter coordinates below. A fixed <b>10 x 10 km</b> area will be analyzed.
+          </div>
+          <div class="coord-grid">
+            <div class="coord-field">
+              <label>Latitude</label>
+              <input type="number" id="latIn" placeholder="e.g. -3.4" step="0.00001" min="-90" max="90">
+            </div>
+            <div class="coord-field">
+              <label>Longitude</label>
+              <input type="number" id="lonIn" placeholder="e.g. -62.2" step="0.00001" min="-180" max="180">
+            </div>
+          </div>
+          <button class="ghost-btn" onclick="useCoords()">Set Pin from Coordinates</button>
+          <div id="pinChip"></div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-title">
+            <span class="num">2</span>
+            Time Period
+          </div>
+          <div class="year-slider">
+            <span class="label">From</span>
+            <input type="range" id="y1" min="2017" max="2025" value="2019" oninput="syncYears()">
+            <span class="value" id="y1v">2019</span>
+          </div>
+          <div class="year-slider">
+            <span class="label">To</span>
+            <input type="range" id="y2" min="2018" max="2026" value="2024" oninput="syncYears()">
+            <span class="value" id="y2v">2024</span>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-title">
+            <span class="num">3</span>
+            Run Analysis
+          </div>
+          <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()" disabled>
+            ANALYZE REGION
+          </button>
+          <div id="selSum"></div>
+          <div id="statusMsg"></div>
+        </div>
+      </aside>
+
+      <!-- Map Area -->
+      <section class="map-area">
+        <div class="map-bar">
+          <div class="map-controls">
+            <span>Basemap:</span>
+            <button class="layer-btn on" onclick="setLayer('street',this)">Street</button>
+            <button class="layer-btn" onclick="setLayer('sat',this)">Satellite</button>
+            <button class="layer-btn" onclick="setLayer('hybrid',this)">Hybrid</button>
+          </div>
+          <div class="map-controls" id="overlayRow">
+            <span>Overlay:</span>
+            <button class="layer-btn" id="ovNone" onclick="setOverlay('none',this)">None</button>
+            <button class="layer-btn on" id="ovY1" onclick="setOverlay('y1',this)">Year 1</button>
+            <button class="layer-btn" id="ovY2" onclick="setOverlay('y2',this)">Year 2</button>
+          </div>
+        </div>
+        <div id="map"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- RESULTS OVERLAY (CENTER MODAL) -->
+  <div id="resultsOverlay">
+    <div class="results-modal">
+      <button class="results-close" onclick="closeResults()">&times;</button>
+      <div class="results-header">
+        <div>
+          <h2>Analysis Results</h2>
+          <small id="resLbl"></small>
+        </div>
+      </div>
+      <div class="results-content">
+        <div class="metrics-row">
+          <div class="metric-card">
+            <div class="label">Analysis Area</div>
+            <div class="value neu">100</div>
+            <div class="sub neu">km² (10x10)</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Forest Loss</div>
+            <div class="value neg" id="mDef">—</div>
+            <div class="sub neg" id="mDefP"></div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Forest Gain</div>
+            <div class="value pos" id="mAff">—</div>
+            <div class="sub pos" id="mAffP"></div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Net Change</div>
+            <div class="value" id="mNet">—</div>
+            <div class="sub" id="mNetC"></div>
+          </div>
+        </div>
+
+        <div class="info-box" id="infoBox"></div>
+
+        <div class="section-container">
+          <div class="section-label">Sentinel-2 Imagery (Google Earth Engine)</div>
+          <div class="sat-compare">
+            <div class="img-card">
+              <img class="gee-img" id="geeImg1" src="" alt="GEE Year 1">
+              <div class="img-caption"><b id="cap1">Year 1</b><span>Sentinel-2 / GEE</span></div>
+            </div>
+            <div class="img-card">
+              <img class="gee-img" id="geeImg2" src="" alt="GEE Year 2">
+              <div class="img-caption"><b id="cap2">Year 2</b><span>Sentinel-2 / GEE</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-container">
+          <div class="section-label">Forest Masks & Change Detection</div>
+          <div class="masks-grid">
+            <div class="img-card">
+              <canvas id="cm1" width="300" height="300"></canvas>
+              <div class="img-caption"><b id="capm1">Mask Y1</b></div>
+            </div>
+            <div class="img-card">
+              <canvas id="cm2" width="300" height="300"></canvas>
+              <div class="img-caption"><b id="capm2">Mask Y2</b></div>
+            </div>
+            <div class="img-card">
+              <canvas id="cmc" width="300" height="300"></canvas>
+              <div class="img-caption"><b>Change Map</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#228b22"></div>Stable Forest</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#8b6914"></div>Non-forest</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Deforestation</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>Afforestation</div>
+        </div>
+
+        <button id="reportBtn" onclick="generateReport()">Download PDF Report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spinner with rotating deforestation facts -->
+  <div id="spinner">
+    <div class="spinner-ring"></div>
+    <div class="spinner-text" id="spintxt">Fetching Sentinel-2 imagery...</div>
+    <div class="spinner-sub" id="spintxt2">This may take 20-40 seconds</div>
+    <div class="fact-card" id="factCard">
+      <div class="fact-inner" id="factInner">
+        <div class="fact-label">🌿 Did You Know?</div>
+        <div class="fact-text" id="factText"></div>
+        <div class="fact-source" id="factSource"></div>
+      </div>
+      <div class="fact-dots" id="factDots"></div>
+    </div>
+  </div>
+
+  <!-- JS Dependencies & Custom JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
